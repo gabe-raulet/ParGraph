@@ -1,6 +1,7 @@
 import sys
 import numpy as np
 from enum import IntEnum
+import heapq as heap
 
 class GraphWeight(IntEnum):
     UNWEIGHTED = 0
@@ -114,3 +115,94 @@ class Graph(object):
                     edges.append((u,v))
 
         return cls(n, m, edges, directedness, weight)
+
+    def neighbors(self, u, add_weights=False):
+        if add_weights:
+            if self.is_weighted():
+                for p in range(self.ir[u], self.ir[u+1]):
+                    yield self.jc[p], self.num[p]
+            else:
+                for p in range(self.ir[u], self.ir[u+1]):
+                    yield self.jc[p], 1
+        else:
+            for p in range(self.ir[u], self.ir[u+1]):
+                yield self.jc[p]
+
+    def edges(self, add_weights=False):
+        n = self.num_vertices()
+        if add_weights:
+            if self.is_weighted():
+                for i in range(n):
+                    for p in range(self.ir[i], self.ir[i+1]):
+                        yield (i, self.jc[p], self.num[p])
+            else:
+                for i in range(n):
+                    for p in range(self.ir[i], self.ir[i+1]):
+                        yield (i, self.jc[p], 1)
+        else:
+            for i in range(n):
+                for p in range(self.ir[i], self.ir[i+1]):
+                    yield i, self.jc[p]
+
+    def bfs(self, source):
+        n = self.num_vertices()
+        levels = np.ones(n, dtype=int) * -1
+        parents = np.ones(n, dtype=int) * -1
+        frontier = [source]
+        parents[source] = source
+        level = 0
+        levels[source] = level
+
+        while len(frontier) > 0:
+            level += 1
+            neighbors = []
+            for u in frontier:
+                for v in self.neighbors(u):
+                    if levels[v] == -1:
+                        levels[v] = level
+                        parents[v] = u
+                        neighbors.append(v)
+            frontier = neighbors[:]
+
+        return levels, parents
+
+    def apsp(self):
+        n = self.num_vertices()
+        D = np.ones((n,n), dtype=float) * np.inf
+
+        for i in range(n):
+            D[i,i] = 0
+
+        for i,j,w in self.edges(add_weights=True):
+            D[i,j] = w
+
+        for k in range(n):
+            for i in range(n):
+                for j in range(n):
+                    D[i,j] = min(D[i,j], D[i,k] + D[k,j])
+
+        return D
+
+    def sssp(self, source):
+        n = self.num_vertices()
+        visited = set()
+        parents = np.ones(n, dtype=int) * -1
+        parents[source] = source
+        costs = np.ones(n, dtype=float) * np.inf
+        costs[source] = 0
+        pq = []
+        heap.heappush(pq, (0, source))
+
+        while pq:
+            _, u = heap.heappop(pq)
+            visited.add(u)
+            for v, weight in self.neighbors(u, add_weights=True):
+                if v in visited:
+                    continue
+                newcost = costs[u] + weight
+                if costs[v] > newcost:
+                    parents[v] = u
+                    costs[v] = newcost
+                    heap.heappush(pq, (newcost, v))
+
+        return costs, parents
