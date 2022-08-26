@@ -206,3 +206,55 @@ class Graph(object):
                     heap.heappush(pq, (newcost, v))
 
         return costs, parents
+
+def usage():
+    sys.stderr.write("usage: python suite.py [graph.txt] [bfs || sssp || apsp] ([source])\n")
+    sys.stderr.flush()
+    sys.exit(-1)
+
+if __name__ == "__main__":
+
+    argc = len(sys.argv)
+
+    if argc < 3 or argc > 4:
+        usage()
+
+    graph_filename = sys.argv[1]
+    graph_algorithm = sys.argv[2]
+
+    if argc == 4:
+        source = int(sys.argv[3])
+
+    if graph_algorithm not in ["bfs", "sssp", "apsp"]:
+        usage()
+
+    if graph_algorithm in ["bfs", "sssp"] and argc != 4:
+        usage()
+
+    if graph_algorithm == "apsp" and argc == 4:
+        usage()
+
+    G = Graph.read(graph_filename)
+
+    if graph_algorithm == "bfs":
+        levels, parents = G.bfs(source)
+        sys.stdout.write(",".join(str(levels[i]) for i in range(G.num_vertices())) + '\n')
+        sys.stdout.write(",".join(str(parents[i]) for i in range(G.num_vertices())) + '\n')
+        sys.stdout.flush()
+    elif graph_algorithm == "sssp":
+        costs, parents = G.sssp(source)
+        if G.weight == GraphWeight.UNWEIGHTED or G.weight == GraphWeight.WEIGHTED_INT:
+            costtype = lambda x: -1 if x == np.inf else int(x)
+        else:
+            costtype = lambda x: -1 if x == np.inf else float(x)
+        sys.stdout.write(",".join(str(costtype(costs[i])) for i in range(G.num_vertices())) + '\n')
+        sys.stdout.write(",".join(str(parents[i]) for i in range(G.num_vertices())) + '\n')
+        sys.stdout.flush()
+    elif graph_algorithm == "apsp":
+        D = G.apsp()
+        for i in range(G.num_vertices()):
+            sys.stdout.write(",".join(str(round(D[i,j], 5)) for j in range(G.num_vertices())) + '\n')
+        sys.stdout.flush()
+
+
+
