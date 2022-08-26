@@ -1,0 +1,27 @@
+Run experiments on parallel implementations of breadth-first-search, single-source shortest paths,
+and all-pair shortest paths algorithms. Test using CSR and CSC formats, with the following 6 types
+of graphs considered:
+
+    1. Undirected Unweighted
+    2. Undirected Weighted (integral)
+    3. Undirected Weighted (real)
+    4. Directed Unweighted
+    5. Directed Weighted (integral)
+    6. Directed Weighted (real)
+
+Graphs will be stored in text files whose header is:
+
+    [n (number of vertices)] [m (number of edges)] [0 (undirected) || 1 (directed)] [0 (unweighted) || 1 (integeral weighted) || 2 (real weighted)]
+
+and whose body stores one edge per line with:
+
+    [u (source vertex)] [v (dest vertex)] ([w (weight)])
+
+Vertex ids are always 0-indexed.
+
+Graphs can be stored either in CSC or CSR formats. Algorithms can be implemented in a GraphBLAS
+style using linear-algebra primitives on monoids or semirings, where the underlying data structure
+is treated as a matrix, or they can be implemented in a classical fashion, treating the data
+structure as a compressed adjacency list representation of a graph. In either case, a sparse matrix
+data structure is the underlying storage format. If using a classical implementation, the matrix
+must be in CSR format, since that makes more sense for an adjacency list.
