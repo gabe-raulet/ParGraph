@@ -44,6 +44,8 @@ void bfs(const spmat *G, long source, long *levels, long *parents)
         t = frontier;
         frontier = neighbors;
         neighbors = t;
+
+        ++level;
     }
 
     array_free(a1);
