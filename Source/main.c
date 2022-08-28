@@ -17,6 +17,13 @@ void print_long_array(FILE *f, const long *arr, long n)
     fprintf(f, "%ld\n", arr[n-1]);
 }
 
+void print_double_array(FILE *f, const double *arr, long n)
+{
+    for (long i = 0; i < n-1; ++i)
+        fprintf(f, "%lg,", arr[i]);
+    fprintf(f, "%lg\n", arr[n-1]);
+}
+
 int main(int argc, char *argv[])
 {
     if (argc < 3 || argc > 4) return usage(*argv);
@@ -54,6 +61,16 @@ int main(int argc, char *argv[])
 
         free(levels);
         free(parents);
+    }
+    else if (!strcmp(algo, "apsp"))
+    {
+        double *dist = malloc(n*n * sizeof(double));
+        apsp(g, dist);
+
+        for (long i = 0; i < n; ++i)
+            print_double_array(stdout, &dist[i*n], n);
+
+        free(dist);
     }
 
     spmat_free(g);

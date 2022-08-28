@@ -2,12 +2,44 @@
 #include "array.h"
 #include <math.h>
 
-void bfs(const spmat *G, long source, long *levels, long *parents)
+static inline double infplus(double a, double b)
+{
+    return (a < 0 || b < 0)? -1 : a + b;
+}
+
+static inline double infmin(double a, double b)
+{
+    if (a < 0) return b;
+    if (b < 0) return a;
+    return (a < b)? a : b;
+}
+
+void apsp(const spmat *graph, double *dist)
+{
+    long n = getnrows(graph);
+
+    for (long i = 0; i < n*n; ++i)
+        dist[i] = -1;
+
+    for (long i = 0; i < n; ++i)
+        for (long p = graph->ir[i]; p < graph->ir[i+1]; ++p)
+            dist[i*n + graph->jc[p]] = graph->num? graph->num[p] : 1;
+
+    for (long i = 0; i < n; ++i)
+        dist[i*n + i] = 0;
+
+    for (long k = 0; k < n; ++k)
+        for (long i = 0; i < n; ++i)
+            for (long j = 0; j < n; ++j)
+                dist[i*n + j] = infmin(dist[i*n + j], infplus(dist[i*n + k], dist[k*n + j]));
+}
+
+void bfs(const spmat *graph, long source, long *levels, long *parents)
 {
     array_t(long) a1, a2, *frontier, *neighbors, *t;
     array_init(a1);
     array_init(a2);
-    long n = getnrows(G);
+    long n = getnrows(graph);
 
     frontier = &a1;
     neighbors = &a2;
@@ -29,9 +61,9 @@ void bfs(const spmat *G, long source, long *levels, long *parents)
         for (long ui = 0; ui < array_size(*frontier); ++ui)
         {
             long u = array_at(*frontier, ui);
-            for (long vi = G->ir[u]; vi < G->ir[u+1]; ++vi)
+            for (long vi = graph->ir[u]; vi < graph->ir[u+1]; ++vi)
             {
-                long v = G->jc[vi];
+                long v = graph->jc[vi];
                 if (levels[v] == -1)
                 {
                     levels[v] = level;
