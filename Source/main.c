@@ -1,5 +1,6 @@
 #include "graph.h"
 #include "spmat.h"
+#include "minheap.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -71,6 +72,18 @@ int main(int argc, char *argv[])
             print_double_array(stdout, &dist[i*n], n);
 
         free(dist);
+    }
+    else /* sssp */
+    {
+        double *costs = malloc(n * sizeof(double));
+        long *parents = malloc(n * sizeof(long));
+
+        sssp(g, source, costs, parents);
+
+        print_double_array(stdout, costs, n);
+        print_long_array(stdout, parents, n);
+
+
     }
 
     spmat_free(g);

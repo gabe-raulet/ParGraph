@@ -1,7 +1,7 @@
 CFLAGS=-fopenmp -Wno-unknown-pragmas -g
 CC=gcc-11
 INCLUDES=-I.
-OBJS=spmat.o graph.o
+OBJS=spmat.o graph.o minheap.o bitmap.o
 PROG=main
 
 D?=0
@@ -26,4 +26,6 @@ clean:
 	rm -rf *.dSYM *.o tests/*.o *.a a.out $(PROG) $(TEST)
 
 spmat.o: spmat.h
-graph.o: graph.h spmat.h array.h
+graph.o: graph.h spmat.h array.h bitmap.h
+minheap.o: minheap.h array.h
+bitmap.o: bitmap.h array.h

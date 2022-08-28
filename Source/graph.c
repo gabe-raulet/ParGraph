@@ -1,37 +1,75 @@
 #include "graph.h"
 #include "array.h"
+#include "minheap.h"
+#include "bitmap.h"
+#include "infdouble.h"
 #include <math.h>
-
-static inline double infplus(double a, double b)
-{
-    return (a < 0 || b < 0)? -1 : a + b;
-}
-
-static inline double infmin(double a, double b)
-{
-    if (a < 0) return b;
-    if (b < 0) return a;
-    return (a < b)? a : b;
-}
 
 void apsp(const spmat *graph, double *dist)
 {
-    long n = getnrows(graph);
+    long n, k, i, j, p;
 
-    for (long i = 0; i < n*n; ++i)
+    n = getnrows(graph);
+
+    for (i = 0; i < n*n; ++i)
         dist[i] = -1;
 
-    for (long i = 0; i < n; ++i)
-        for (long p = graph->ir[i]; p < graph->ir[i+1]; ++p)
+    for (i = 0; i < n; ++i)
+        for (p = graph->ir[i]; p < graph->ir[i+1]; ++p)
             dist[i*n + graph->jc[p]] = graph->num? graph->num[p] : 1;
 
-    for (long i = 0; i < n; ++i)
+    for (i = 0; i < n; ++i)
         dist[i*n + i] = 0;
 
-    for (long k = 0; k < n; ++k)
-        for (long i = 0; i < n; ++i)
-            for (long j = 0; j < n; ++j)
+    for (k = 0; k < n; ++k)
+        for (i = 0; i < n; ++i)
+            for (j = 0; j < n; ++j)
                 dist[i*n + j] = infmin(dist[i*n + j], infplus(dist[i*n + k], dist[k*n + j]));
+}
+
+void sssp(const spmat *graph, long source, double *costs, long *parents)
+{
+    long n = getnrows(graph);
+    bitmap *visited = bitmap_init(n);
+
+    for (long i = 0; i < n; ++i)
+    {
+        parents[i] = -1;
+        costs[i] = -1;
+    }
+
+    parents[source] = source;
+    costs[source] = 0;
+
+    minheap *pq = minheap_init((long)log2(n));
+    minheap_insert(pq, 0, source);
+
+    while (!minheap_empty(pq))
+    {
+        long u = minheap_extract(pq);
+        bitmap_set(visited, u);
+
+        for (long p = graph->ir[u]; p < graph->ir[u+1]; ++p)
+        {
+            long v = graph->jc[p];
+
+            if (bitmap_get(visited, v))
+                continue;
+
+            double weight = graph->num? graph->num[p] : 1;
+            double newcost = infplus(costs[u], weight);
+
+            if (inflt(newcost, costs[v]))
+            {
+                parents[v] = u;
+                costs[v] = newcost;
+                minheap_insert(pq, newcost, v);
+            }
+        }
+    }
+
+    bitmap_free(visited);
+    minheap_free(pq);
 }
 
 void bfs(const spmat *graph, long source, long *levels, long *parents)
