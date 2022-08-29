@@ -9,7 +9,7 @@
 
 static int usage(const char *exepath)
 {
-    fprintf(stderr, "usage: %s [graph.txt] [bfs || sssp || apsp || uy] ([source])\n", exepath);
+    fprintf(stderr, "usage: %s [graph.txt] [bfs || sssp || apsp || uy] ([source]) ([constant])\n", exepath);
     return -1;
 }
 
@@ -31,22 +31,28 @@ int main(int argc, char *argv[])
 {
     srand(time(0)*getpid());
 
-    if (argc < 3 || argc > 4) return usage(*argv);
+    if (argc < 3 || argc > 5) return usage(*argv);
 
     const char *fname = argv[1];
     const char *algo = argv[2];
 
     int source;
+    double constant;
 
-    if (argc == 4) source = atoi(argv[3]);
+    if (argc == 4 || argc == 5) source = atoi(argv[3]);
+
+    if (argc == 5) constant = atof(argv[4]);
 
     if (strcmp(algo, "bfs") && strcmp(algo, "sssp") && strcmp(algo, "apsp") && strcmp(algo, "uy"))
         return usage(*argv);
 
-    if ((!strcmp(algo, "bfs") || !strcmp(algo, "sssp") || !strcmp(algo, "uy")) && argc != 4)
+    if ((!strcmp(algo, "bfs") || !strcmp(algo, "sssp")) && argc != 4)
         return usage(*argv);
 
-    if (!strcmp(algo, "apsp") && argc == 4)
+    if (!strcmp(algo, "uy") && argc != 5)
+        return usage(*argv);
+
+    if (!strcmp(algo, "apsp") && argc >= 4)
         return usage(*argv);
 
     FILE *f = fopen(fname, "r");
@@ -70,7 +76,7 @@ int main(int argc, char *argv[])
     else if (!strcmp(algo, "uy"))
     {
         long *levels = malloc(n * sizeof(long));
-        uy(g, source, 1.0, levels);
+        uy(g, source, constant, levels);
 
         print_long_array(stdout, levels, n);
 

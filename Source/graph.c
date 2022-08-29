@@ -231,6 +231,11 @@ void uy(const spmat *graph, long source, double constant, long *levels)
     long nS; /* number of distinguished vertices */
     long *S; /* array of distinguished vertices */
 
+    double t0, ti, tf;
+
+    t0 = omp_get_wtime();
+    ti = t0;
+
     n = getnrows(graph);
     nS = (long)floor(constant*sqrt(n)*log2(n));
     S = malloc((nS+1) * sizeof(long));
@@ -254,6 +259,9 @@ void uy(const spmat *graph, long source, double constant, long *levels)
         S[0] = source;
     }
 
+    tf = omp_get_wtime();
+    fprintf(stderr, "[ullman yannakakis] Sampled %ld/%ld distinguished vertices [%.3f seconds]\n", nS, n, tf-ti);
+
     int nthreads = 1;
 
     #pragma omp parallel
@@ -267,6 +275,8 @@ void uy(const spmat *graph, long source, double constant, long *levels)
         S_levels[i] = malloc(n * sizeof(long));
 
     long limit = (long)ceil(sqrt(n));
+
+    ti = omp_get_wtime();
 
     #pragma omp parallel
     {
@@ -285,6 +295,12 @@ void uy(const spmat *graph, long source, double constant, long *levels)
             bfs(graph, u, S_levels[i], NULL, limit);
         }
     }
+
+    tf = omp_get_wtime();
+
+    fprintf(stderr, "[ullman yannakakis] Ran %ld-limited searches from %ld distinguished vertices in parallel [%.3f seconds]\n", limit, nS, tf-ti);
+
+    ti = omp_get_wtime();
 
     array_t(long) ri_H, ci_H;
     array_t(double) vs_H;
@@ -325,6 +341,12 @@ void uy(const spmat *graph, long source, double constant, long *levels)
     for (long i = 0; i < nS; ++i)
         costs[i] = malloc(nS * sizeof(double));
 
+    tf = omp_get_wtime();
+
+    fprintf(stderr, "[ullman yannakakis] Constructed auxiliary graph with %ld vertices and %ld edges [%.3f seconds]\n", nS, mH, tf-ti);
+
+    ti = omp_get_wtime();
+
     #pragma omp parallel
     {
         int tid = omp_get_thread_num();
@@ -342,13 +364,19 @@ void uy(const spmat *graph, long source, double constant, long *levels)
 
     spmat_free(H);
 
-    #pragma omp parallel for schedule(static, 1)
+    tf = omp_get_wtime();
+
+    fprintf(stderr, "[ullman yannakakis] Ran Dijkstra's shortest path algorithm from each vertex in auxiliary graph in parallel [%.3f seconds]\n", tf-ti);
+
+    ti = omp_get_wtime();
+
+    #pragma omp parallel for
     for (long i = 0; i < n; ++i)
         levels[i] = -1;
 
     levels[source] = 0;
 
-    #pragma omp parallel for schedule(static, 1)
+    #pragma omp parallel for
     for (long v = 0; v < n; ++v)
     {
         double minpath = -1;
@@ -365,6 +393,10 @@ void uy(const spmat *graph, long source, double constant, long *levels)
         levels[v] = (long)minpath;
     }
 
+    tf = omp_get_wtime();
+
+    fprintf(stderr, "[ullman yannakakis] Found min paths using limited search and auxiliary search [%.3f seconds]\n", tf-ti);
+
     free(S);
 
     for (long i = 0; i < nS; ++i)
@@ -375,6 +407,9 @@ void uy(const spmat *graph, long source, double constant, long *levels)
 
     free(S_levels);
     free(costs);
+
+    tf = omp_get_wtime();
+    fprintf(stderr, "[ullman yannakakis] wallclock time [%.3f seconds]\n", tf-t0);
 }
 
 void bfs(const spmat *graph, long source, long *levels, long *parents, long limit)
