@@ -3,7 +3,9 @@
 #include "minheap.h"
 #include "bitmap.h"
 #include "infdouble.h"
+#include <assert.h>
 #include <math.h>
+#include <omp.h>
 
 void apsp(const spmat *graph, double *dist)
 {
@@ -34,12 +36,12 @@ void sssp(const spmat *graph, long source, double *costs, long *parents)
 
     for (long i = 0; i < n; ++i)
     {
-        parents[i] = -1;
         costs[i] = -1;
+        if (parents) parents[i] = -1;
     }
 
-    parents[source] = source;
     costs[source] = 0;
+    if (parents) parents[source] = source;
 
     minheap *pq = minheap_init((long)log2(n));
     minheap_insert(pq, 0, source);
@@ -61,8 +63,8 @@ void sssp(const spmat *graph, long source, double *costs, long *parents)
 
             if (inflt(newcost, costs[v]))
             {
-                parents[v] = u;
                 costs[v] = newcost;
+                if (parents) parents[v] = u;
                 minheap_insert(pq, newcost, v);
             }
         }
@@ -72,7 +74,310 @@ void sssp(const spmat *graph, long source, double *costs, long *parents)
     minheap_free(pq);
 }
 
-void bfs(const spmat *graph, long source, long *levels, long *parents)
+/**
+ * @func fisher_yates
+ *
+ * @param arr [long*] - array of >= k longs where random sample goes
+ * @param k   [long]  - number of integers to sample
+ * @param n   [long]  - sample from [0..n-1]
+ *
+ * Randomly sample k integers without replacement from [0..n-1].
+ **/
+void fisher_yates(long *arr, long k, long n)
+{
+    long *x, l, i, r, t;
+
+    x = malloc(n * sizeof(long));
+
+    for (l = 0; l < n; ++l)
+        x[l] = l;
+
+    for (i = 0; i < k; ++i)
+    {
+        r = rand() % (n-i);
+        t = x[r];
+        x[r] = x[n-i-1];
+        x[n-i-1] = t;
+    }
+
+    for (i = 0; i < k; ++i)
+        arr[i] = x[n-k+i];
+
+    free(x);
+}
+
+void uy_seq(const spmat *graph, long source, double constant, long *levels)
+{
+    long n;  /* number of vertices */
+    long nS; /* number of distinguished vertices */
+    long *S; /* array of distinguished vertices */
+
+    n = getnrows(graph);
+    nS = (long)floor(constant*sqrt(n)*log2(n));
+    S = malloc((nS+1) * sizeof(long));
+
+    fisher_yates(S, nS, n);
+
+    long t = -1;
+
+    for (long i = 0; i < nS; ++i)
+        if (S[i] == source)
+        {
+            t = S[0];
+            S[0] = S[i];
+            S[i] = t;
+            break;
+        }
+
+    if (t < 0)
+    {
+        S[nS++] = S[0];
+        S[0] = source;
+    }
+
+    long **S_levels = malloc(nS * sizeof(long*));
+
+    for (long i = 0; i < nS; ++i)
+        S_levels[i] = malloc(n * sizeof(long));
+
+    long limit = (long)ceil(sqrt(n));
+
+    for (long i = 0; i < nS; ++i)
+    {
+        long u = S[i];
+        bfs(graph, u, S_levels[i], NULL, limit);
+    }
+
+    array_t(long) ri_H, ci_H;
+    array_t(double) vs_H;
+
+    array_init(ri_H);
+    array_init(ci_H);
+    array_init(vs_H);
+
+    for (long xH = 0; xH < nS; ++xH)
+        for (long yH = 0; yH < nS; ++yH)
+        {
+            if (xH == yH) continue;
+
+            long yG = S[yH];
+            double xycost = S_levels[xH][yG];
+
+            if (xycost >= 0)
+            {
+                *array_push(ri_H) = xH;
+                *array_push(ci_H) = yH;
+                *array_push(vs_H) = xycost;
+            }
+        }
+
+    long mH = array_size(ri_H);
+    long *ri = array_release(ri_H);
+    long *ci = array_release(ci_H);
+    double *vs = array_release(vs_H);
+
+    spmat *H = spmat_init(nS, nS, mH, ri, ci, vs);
+
+    free(ri);
+    free(ci);
+    free(vs);
+
+    double **costs = malloc(nS * sizeof(double*));
+
+    for (long i = 0; i < nS; ++i)
+        costs[i] = malloc(nS * sizeof(double));
+
+    for (long s = 0; s < nS; ++s)
+        sssp(H, s, costs[s], NULL);
+
+    spmat_free(H);
+
+    for (long i = 0; i < n; ++i)
+        levels[i] = -1;
+
+    levels[source] = 0;
+
+    for (long v = 0; v < n; ++v)
+    {
+        double minpath = -1;
+
+        for (long x = 0; x < nS; ++x)
+        {
+            double Psx = costs[0][x];
+            double Pxv = (double)S_levels[x][v];
+            double Psv = infplus(Psx, Pxv);
+
+            minpath = infmin(minpath, Psv);
+        }
+
+        levels[v] = (long)minpath;
+    }
+
+    free(S);
+
+    for (long i = 0; i < nS; ++i)
+    {
+        free(S_levels[i]);
+        free(costs[i]);
+    }
+
+    free(S_levels);
+    free(costs);
+}
+
+void uy(const spmat *graph, long source, double constant, long *levels)
+{
+    long n;  /* number of vertices */
+    long nS; /* number of distinguished vertices */
+    long *S; /* array of distinguished vertices */
+
+    n = getnrows(graph);
+    nS = (long)floor(constant*sqrt(n)*log2(n));
+    S = malloc((nS+1) * sizeof(long));
+
+    fisher_yates(S, nS, n);
+
+    long t = -1;
+
+    for (long i = 0; i < nS; ++i)
+        if (S[i] == source)
+        {
+            t = S[0];
+            S[0] = S[i];
+            S[i] = t;
+            break;
+        }
+
+    if (t < 0)
+    {
+        S[nS++] = S[0];
+        S[0] = source;
+    }
+
+    int nthreads = 1;
+
+    #pragma omp parallel
+    {
+        nthreads = omp_get_num_threads();
+    }
+
+    long **S_levels = malloc(nS * sizeof(long*));
+
+    for (long i = 0; i < nS; ++i)
+        S_levels[i] = malloc(n * sizeof(long));
+
+    long limit = (long)ceil(sqrt(n));
+
+    #pragma omp parallel
+    {
+        int tid = omp_get_thread_num();
+        int nthrds = omp_get_num_threads();
+
+        assert(nthrds == nthreads);
+
+        long chunksize = nS / nthreads;
+        long start = chunksize * ((long)tid);
+        long end = (tid != nthreads-1)? start + chunksize : nS;
+
+        for (long i = start; i < end; ++i)
+        {
+            long u = S[i];
+            bfs(graph, u, S_levels[i], NULL, limit);
+        }
+    }
+
+    array_t(long) ri_H, ci_H;
+    array_t(double) vs_H;
+
+    array_init(ri_H);
+    array_init(ci_H);
+    array_init(vs_H);
+
+    for (long xH = 0; xH < nS; ++xH)
+        for (long yH = 0; yH < nS; ++yH)
+        {
+            if (xH == yH) continue;
+
+            long yG = S[yH];
+            double xycost = S_levels[xH][yG];
+
+            if (xycost >= 0)
+            {
+                *array_push(ri_H) = xH;
+                *array_push(ci_H) = yH;
+                *array_push(vs_H) = xycost;
+            }
+        }
+
+    long mH = array_size(ri_H);
+    long *ri = array_release(ri_H);
+    long *ci = array_release(ci_H);
+    double *vs = array_release(vs_H);
+
+    spmat *H = spmat_init(nS, nS, mH, ri, ci, vs);
+
+    free(ri);
+    free(ci);
+    free(vs);
+
+    double **costs = malloc(nS * sizeof(double*));
+
+    for (long i = 0; i < nS; ++i)
+        costs[i] = malloc(nS * sizeof(double));
+
+    #pragma omp parallel
+    {
+        int tid = omp_get_thread_num();
+        int nthrds = omp_get_num_threads();
+
+        assert(nthrds == nthreads);
+
+        long chunksize = nS / nthreads;
+        long start = chunksize * ((long)tid);
+        long end = (tid != nthreads-1)? start + chunksize : nS;
+
+        for (long s = start; s < end; ++s)
+            sssp(H, s, costs[s], NULL);
+    }
+
+    spmat_free(H);
+
+    #pragma omp parallel for schedule(static, 1)
+    for (long i = 0; i < n; ++i)
+        levels[i] = -1;
+
+    levels[source] = 0;
+
+    #pragma omp parallel for schedule(static, 1)
+    for (long v = 0; v < n; ++v)
+    {
+        double minpath = -1;
+
+        for (long x = 0; x < nS; ++x)
+        {
+            double Psx = costs[0][x];
+            double Pxv = (double)S_levels[x][v];
+            double Psv = infplus(Psx, Pxv);
+
+            minpath = infmin(minpath, Psv);
+        }
+
+        levels[v] = (long)minpath;
+    }
+
+    free(S);
+
+    for (long i = 0; i < nS; ++i)
+    {
+        free(S_levels[i]);
+        free(costs[i]);
+    }
+
+    free(S_levels);
+    free(costs);
+}
+
+void bfs(const spmat *graph, long source, long *levels, long *parents, long limit)
 {
     array_t(long) a1, a2, *frontier, *neighbors, *t;
     array_init(a1);
@@ -83,17 +388,26 @@ void bfs(const spmat *graph, long source, long *levels, long *parents)
     neighbors = &a2;
 
     for (long i = 0; i < n; ++i)
-        levels[i] = parents[i] = -1;
+    {
+        levels[i] = -1;
+        if (parents) parents[i] = -1;
+    }
 
     levels[source] = 0;
-    parents[source] = source;
+    if (parents) parents[source] = source;
 
     *array_push(*frontier) = source;
 
-    long level = 1;
+    long level = 0;
+
+    if (limit <= 0) limit = n+1;
 
     while (!array_empty(*frontier))
     {
+
+        if (level++ >= limit)
+            break;
+
         array_clear(*neighbors);
 
         for (long ui = 0; ui < array_size(*frontier); ++ui)
@@ -105,7 +419,7 @@ void bfs(const spmat *graph, long source, long *levels, long *parents)
                 if (levels[v] == -1)
                 {
                     levels[v] = level;
-                    parents[v] = u;
+                    if (parents) parents[v] = u;
                     *array_push(*neighbors) = v;
                 }
             }
@@ -114,8 +428,6 @@ void bfs(const spmat *graph, long source, long *levels, long *parents)
         t = frontier;
         frontier = neighbors;
         neighbors = t;
-
-        ++level;
     }
 
     array_free(a1);

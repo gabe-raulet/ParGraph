@@ -4,10 +4,12 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <time.h>
+#include <unistd.h>
 
 static int usage(const char *exepath)
 {
-    fprintf(stderr, "usage: %s [graph.txt] [bfs || sssp || apsp] ([source])\n", exepath);
+    fprintf(stderr, "usage: %s [graph.txt] [bfs || sssp || apsp || uy] ([source])\n", exepath);
     return -1;
 }
 
@@ -27,6 +29,8 @@ void print_double_array(FILE *f, const double *arr, long n)
 
 int main(int argc, char *argv[])
 {
+    srand(time(0)*getpid());
+
     if (argc < 3 || argc > 4) return usage(*argv);
 
     const char *fname = argv[1];
@@ -36,10 +40,10 @@ int main(int argc, char *argv[])
 
     if (argc == 4) source = atoi(argv[3]);
 
-    if (strcmp(algo, "bfs") && strcmp(algo, "sssp") && strcmp(algo, "apsp"))
+    if (strcmp(algo, "bfs") && strcmp(algo, "sssp") && strcmp(algo, "apsp") && strcmp(algo, "uy"))
         return usage(*argv);
 
-    if ((!strcmp(algo, "bfs") || !strcmp(algo, "sssp")) && argc != 4)
+    if ((!strcmp(algo, "bfs") || !strcmp(algo, "sssp") || !strcmp(algo, "uy")) && argc != 4)
         return usage(*argv);
 
     if (!strcmp(algo, "apsp") && argc == 4)
@@ -55,13 +59,22 @@ int main(int argc, char *argv[])
     {
         long *levels = malloc(n * sizeof(long));
         long *parents = malloc(n * sizeof(long));
-        bfs(g, source, levels, parents);
+        bfs(g, source, levels, parents, 0);
 
         print_long_array(stdout, levels, n);
         print_long_array(stdout, parents, n);
 
         free(levels);
         free(parents);
+    }
+    else if (!strcmp(algo, "uy"))
+    {
+        long *levels = malloc(n * sizeof(long));
+        uy(g, source, 1.0, levels);
+
+        print_long_array(stdout, levels, n);
+
+        free(levels);
     }
     else if (!strcmp(algo, "apsp"))
     {
